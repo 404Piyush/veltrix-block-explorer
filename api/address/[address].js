@@ -1,5 +1,14 @@
 import { ADDRESS_PATTERN, rpcCall, sendError, sendJson } from "../_lib/rpc.js";
 
+const DEFAULT_SCAN_DEPTH = 500;
+const MAX_SCAN_DEPTH = 1000;
+
+function scanDepthFromRequest(req) {
+  const requested = Number.parseInt(req.query.depth, 10);
+  if (!Number.isFinite(requested) || requested <= 0) return DEFAULT_SCAN_DEPTH;
+  return Math.min(requested, MAX_SCAN_DEPTH);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     sendJson(res, 405, { error: "Method not allowed" });
@@ -14,17 +23,49 @@ export default async function handler(req, res) {
       return;
     }
 
-    const [balance, txCount, code] = await Promise.all([
+    const normalizedAddress = value.toLowerCase();
+    const scanDepth = scanDepthFromRequest(req);
+
+    const [balance, txCount, code, latestBlockHex] = await Promise.all([
       rpcCall("eth_getBalance", [value, "latest"]),
       rpcCall("eth_getTransactionCount", [value, "latest"]),
       rpcCall("eth_getCode", [value, "latest"]),
+      rpcCall("eth_blockNumber"),
     ]);
+
+    const latestBlock = Number.parseInt(latestBlockHex, 16);
+    const fromBlock = Math.max(0, latestBlock - scanDepth + 1);
+    const blockRequests = [];
+
+    for (let blockNumber = latestBlock; blockNumber >= fromBlock; blockNumber -= 1) {
+      blockRequests.push(rpcCall("eth_getBlockByNumber", [`0x${blockNumber.toString(16)}`, true]));
+    }
+
+    const blocks = await Promise.all(blockRequests);
+    const recentTransactions = blocks
+      .flatMap((block) =>
+        (block?.transactions || [])
+          .filter((tx) => tx.from?.toLowerCase() === normalizedAddress || tx.to?.toLowerCase() === normalizedAddress)
+          .map((tx) => ({
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to,
+            value: tx.value,
+            blockNumber: tx.blockNumber,
+            transactionIndex: tx.transactionIndex,
+            direction: tx.from?.toLowerCase() === normalizedAddress ? "out" : "in",
+          }))
+      )
+      .slice(0, 25);
 
     sendJson(res, 200, {
       address: value,
       balance,
       transactionCount: Number.parseInt(txCount, 16),
       isContract: code !== "0x",
+      latestBlock,
+      scannedBlockDepth: scanDepth,
+      recentTransactions,
     }, 5);
   } catch (error) {
     sendError(res, error);

@@ -143,7 +143,7 @@ function Header() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="hidden border-primary/30 bg-primary/10 text-primary sm:inline-flex">
             <span className="mr-1 size-1.5 rounded-full bg-emerald-400" />
-            Sepolia
+            Veltrix L2
           </Badge>
           <Button variant="outline" size="icon" aria-label="Toggle navigation" className="md:hidden" onClick={() => setOpen((value) => !value)}>
             {open ? <X className="size-4" /> : <Menu className="size-4" />}
@@ -719,6 +719,7 @@ function TransactionPage() {
 function AddressPage() {
   const { address } = useParams();
   const { data, loading, error } = useApi(`/address/${address}`);
+  const recentTransactions = data?.recentTransactions || [];
 
   return (
     <DetailLayout title="Address" eyebrow={address ? formatAddress(address, 14, 12) : "Address detail"} loading={loading} error={error}>
@@ -733,9 +734,10 @@ function AddressPage() {
               <DetailRow label="Balance" value={`${formatEther(data.balance)} ETH`} />
               <DetailRow label="Transaction count" value={formatNumber(data.transactionCount)} />
               <DetailRow label="Type" value={data.isContract ? "Smart contract" : "Externally owned account"} />
+              <DetailRow label="Indexed window" value={`Latest ${formatNumber(data.scannedBlockDepth)} blocks`} />
             </CardContent>
           </Card>
-          <Card className="border-border/80 bg-card/85">
+          <Card className="depth-panel border-border/80 bg-card/88">
             <CardHeader className="border-b border-border">
               <CardTitle>Profile Signals</CardTitle>
             </CardHeader>
@@ -745,50 +747,79 @@ function AddressPage() {
               <Signal label="Holdings" value={`${formatEther(data.balance, 4)} ETH native balance`} icon={CircleDollarSign} />
             </CardContent>
           </Card>
+          <Card className="depth-panel border-border/80 bg-card/88 lg:col-span-2">
+            <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border">
+              <CardTitle>Recent Address Activity</CardTitle>
+              <Badge variant="secondary">{recentTransactions.length} matches</Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+              <TransactionsTable transactions={recentTransactions} emptyLabel="No matching transactions in the indexed window" embedded />
+            </CardContent>
+          </Card>
         </div>
       )}
     </DetailLayout>
   );
 }
 
-function TransactionsTable({ transactions }) {
+function TransactionRows({ transactions, emptyLabel }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Hash</TableHead>
+          <TableHead>From</TableHead>
+          <TableHead>To</TableHead>
+          <TableHead>Block</TableHead>
+          <TableHead className="text-right">Value</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {transactions.map((tx) => (
+          <TableRow key={tx.hash}>
+            <TableCell>
+              <Link to={`/tx/${tx.hash}`} className="font-mono text-primary hover:text-primary/80">
+                {formatAddress(tx.hash, 10, 8)}
+              </Link>
+            </TableCell>
+            <TableCell className="font-mono text-xs text-muted-foreground">{formatAddress(tx.from)}</TableCell>
+            <TableCell className="font-mono text-xs text-muted-foreground">{formatAddress(tx.to)}</TableCell>
+            <TableCell className="font-mono text-xs text-muted-foreground">
+              {tx.blockNumber ? (
+                <Link to={`/block/${hexToNumber(tx.blockNumber)}`} className="hover:text-foreground">
+                  {formatNumber(tx.blockNumber)}
+                </Link>
+              ) : (
+                "Pending"
+              )}
+            </TableCell>
+            <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} ETH</TableCell>
+          </TableRow>
+        ))}
+        {!transactions.length && (
+          <TableRow>
+            <TableCell colSpan={5}>
+              <EmptyState label={emptyLabel} />
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function TransactionsTable({ transactions, emptyLabel = "No transactions in this block", embedded = false }) {
+  if (embedded) {
+    return <TransactionRows transactions={transactions} emptyLabel={emptyLabel} />;
+  }
+
   return (
     <Card className="depth-panel border-border/80 bg-card/88">
       <CardHeader className="border-b border-border">
         <CardTitle>Transactions In Block</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Hash</TableHead>
-              <TableHead>From</TableHead>
-              <TableHead>To</TableHead>
-              <TableHead className="text-right">Value</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactions.map((tx) => (
-              <TableRow key={tx.hash}>
-                <TableCell>
-                  <Link to={`/tx/${tx.hash}`} className="font-mono text-primary hover:text-primary/80">
-                    {formatAddress(tx.hash, 10, 8)}
-                  </Link>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{formatAddress(tx.from)}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">{formatAddress(tx.to)}</TableCell>
-                <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} ETH</TableCell>
-              </TableRow>
-            ))}
-            {!transactions.length && (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <EmptyState label="No transactions in this block" />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        <TransactionRows transactions={transactions} emptyLabel={emptyLabel} />
       </CardContent>
     </Card>
   );

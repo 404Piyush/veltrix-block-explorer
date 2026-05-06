@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         gasLimit: block.gasLimit,
       })),
       transactions: latestTxs,
-    });
+    }, 2);
   } catch (error) {
     sendError(res, error);
   }

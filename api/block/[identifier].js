@@ -1,4 +1,4 @@
-import { rpcCall, sendError, sendJson } from "../_lib/rpc.js";
+import { BLOCK_NUMBER_PATTERN, HEX_HASH_PATTERN, HEX_QUANTITY_PATTERN, rpcCall, sendError, sendJson } from "../_lib/rpc.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,6 +9,11 @@ export default async function handler(req, res) {
   try {
     const { identifier } = req.query;
     const value = Array.isArray(identifier) ? identifier[0] : identifier;
+    if (!value || (!HEX_HASH_PATTERN.test(value) && !HEX_QUANTITY_PATTERN.test(value) && !BLOCK_NUMBER_PATTERN.test(value))) {
+      sendJson(res, 400, { error: "Invalid block identifier" });
+      return;
+    }
+
     const isHex = value.startsWith("0x");
     const method = isHex && value.length === 66 ? "eth_getBlockByHash" : "eth_getBlockByNumber";
     const params =
@@ -17,7 +22,12 @@ export default async function handler(req, res) {
         : [value, true];
 
     const block = await rpcCall(method, params);
-    sendJson(res, 200, block);
+    if (!block) {
+      sendJson(res, 404, { error: "Block not found" });
+      return;
+    }
+
+    sendJson(res, 200, block, 10);
   } catch (error) {
     sendError(res, error);
   }

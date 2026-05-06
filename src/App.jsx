@@ -5,10 +5,12 @@ import {
   Activity,
   ArrowLeftRight,
   ArrowRight,
+  ArrowUpRight,
   BadgeCheck,
   Blocks,
   Box,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Clock,
   Copy,
@@ -25,6 +27,7 @@ import {
   ShieldCheck,
   TimerReset,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -41,6 +44,13 @@ const api = axios.create({
   baseURL: API_BASE,
   timeout: 7000,
 });
+
+const NAV_ITEMS = [
+  { label: "Blocks", href: "#latest-blocks" },
+  { label: "Transactions", href: "#latest-transactions" },
+  { label: "Network", href: "#network-health" },
+  { label: "API", href: "/api/dashboard", external: true },
+];
 
 const formatAddress = (address, head = 8, tail = 6) => {
   if (!address) return "N/A";
@@ -98,52 +108,91 @@ function Shell({ children }) {
 }
 
 function Header() {
+  const [open, setOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/88 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex min-w-0 items-center gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm">
+          <div className="brand-mark grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
             <Blocks className="size-5" />
           </div>
           <div className="leading-tight">
-            <div className="text-base font-semibold tracking-wide">VELTRIX</div>
+            <div className="text-base font-semibold">VELTRIX</div>
             <div className="text-xs text-muted-foreground">Blockchain Explorer</div>
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-1 rounded-md border border-border bg-card/60 p-1 md:flex">
-          {["Transactions", "Blocks", "Validators", "Tokens"].map((item) => (
-            <Button key={item} variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              {item}
+        <nav className="hidden items-center gap-1 rounded-md border border-border bg-card/70 p-1 md:flex">
+          {NAV_ITEMS.map((item) => (
+            <Button key={item.label} asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              <a href={item.href} target={item.external ? "_blank" : undefined} rel={item.external ? "noreferrer" : undefined}>
+                {item.label}
+                {item.external && <ArrowUpRight className="size-3.5" />}
+              </a>
             </Button>
           ))}
         </nav>
 
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="hidden border-emerald-500/30 bg-emerald-500/10 text-emerald-300 sm:inline-flex">
+          <Badge variant="outline" className="hidden border-primary/30 bg-primary/10 text-primary sm:inline-flex">
             <span className="mr-1 size-1.5 rounded-full bg-emerald-400" />
             Sepolia
           </Badge>
-          <Button variant="outline" size="icon" aria-label="Open menu" className="md:hidden">
-            <Menu className="size-4" />
+          <Button variant="outline" size="icon" aria-label="Toggle navigation" className="md:hidden" onClick={() => setOpen((value) => !value)}>
+            {open ? <X className="size-4" /> : <Menu className="size-4" />}
           </Button>
         </div>
       </div>
+      {open && (
+        <nav className="border-t border-border bg-background/98 px-4 py-3 md:hidden">
+          <div className="mx-auto grid max-w-7xl gap-2">
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.label}
+                className="flex h-10 items-center justify-between rounded-md border border-border bg-card px-3 text-sm text-muted-foreground"
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noreferrer" : undefined}
+                onClick={() => setOpen(false)}
+              >
+                {item.label}
+                {item.external ? <ArrowUpRight className="size-4" /> : <ChevronDown className="size-4 -rotate-90" />}
+              </a>
+            ))}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }
 
 function ExplorerSearch({ compact = false }) {
   const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = (event) => {
     event.preventDefault();
     const value = query.trim();
     if (!value) return;
+    setError("");
 
     if (value.startsWith("0x")) {
-      navigate(value.length === 66 ? `/tx/${value}` : `/address/${value}`);
+      if (/^0x[a-fA-F0-9]{64}$/.test(value)) {
+        navigate(`/tx/${value}`);
+        return;
+      }
+      if (/^0x[a-fA-F0-9]{40}$/.test(value)) {
+        navigate(`/address/${value}`);
+        return;
+      }
+      setError("Enter a valid transaction hash, block hash, or address.");
+      return;
+    }
+
+    if (!/^(0|[1-9]\d*)$/.test(value)) {
+      setError("Enter a block number, transaction hash, block hash, or address.");
       return;
     }
 
@@ -151,23 +200,29 @@ function ExplorerSearch({ compact = false }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className={cn("flex w-full gap-2", compact ? "max-w-2xl" : "max-w-4xl")}>
-      <div className="relative flex-1">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className={cn(
-            "h-12 rounded-md border-border bg-card/85 pl-12 pr-4 font-mono shadow-sm placeholder:font-sans",
-            !compact && "h-14 text-base"
-          )}
-          placeholder="Search by address, transaction hash, block hash, or block number"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+    <form onSubmit={handleSubmit} className={cn("w-full", compact ? "max-w-2xl" : "max-w-4xl")}>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className={cn(
+              "h-12 rounded-md border-border bg-card/90 pl-12 pr-4 font-mono shadow-inner placeholder:font-sans",
+              !compact && "h-14 text-base"
+            )}
+            placeholder="Search address, transaction, block hash, or block number"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (error) setError("");
+            }}
+          />
+        </div>
+        <Button className={cn("h-12 px-5 shadow-elevated", !compact && "h-14 px-7")} type="submit">
+          <Search className="size-4" />
+          Search
+        </Button>
       </div>
-      <Button className={cn("h-12 px-5", !compact && "h-14 px-7")} type="submit">
-        <Search className="size-4" />
-        Search
-      </Button>
+      {error && <div className="mt-2 text-sm text-destructive-foreground">{error}</div>}
     </form>
   );
 }
@@ -215,34 +270,34 @@ function Home() {
 
   return (
     <Shell>
-      <section className="border-b border-border bg-[linear-gradient(180deg,hsl(224_40%_8%),hsl(220_28%_5%))]">
+      <section className="hero-band border-b border-border">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-14">
           <div className="flex flex-col justify-center">
             <div className="mb-5 flex flex-wrap items-center gap-2">
-              <Badge className="bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/15">
+              <Badge className="border border-primary/20 bg-primary/10 text-primary hover:bg-primary/10">
                 <RadioTower className="mr-1 size-3" />
                 Live RPC
               </Badge>
             </div>
             <h1 className="max-w-3xl text-4xl font-semibold tracking-normal text-balance sm:text-5xl lg:text-6xl">
-              Veltrix chain intelligence for every block, account, and transaction.
+              Veltrix Block Explorer
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Search the network, monitor execution health, and inspect activity with a cleaner command center than a classic block table.
+              Blocks, transactions, accounts, and RPC health in one live execution console.
             </p>
             <div className="mt-8">
               <ExplorerSearch />
             </div>
           </div>
 
-          <Card className="overflow-hidden border-border/80 bg-card/80 shadow-2xl shadow-black/30">
+          <Card className="depth-panel overflow-hidden border-border/80 bg-card/88">
             <CardHeader className="border-b border-border">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-base">Network Overview</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Updated every 3 seconds</p>
                 </div>
-                <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+                <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                   <Activity className="mr-1 size-3" />
                   Online
                 </Badge>
@@ -261,6 +316,7 @@ function Home() {
                   <HealthRow key={item.label} {...item} />
                 ))}
               </div>
+              <NetworkScene latestBlock={data?.latestBlock} transactions={data?.transactions?.length || 0} />
             </CardContent>
           </Card>
         </div>
@@ -279,7 +335,7 @@ function Home() {
           <LatestTransactions transactions={data?.transactions || []} />
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <div id="network-health" className="mt-8 grid scroll-mt-24 gap-6 lg:grid-cols-3">
           <InsightCard title="Gas Utilization" icon={Gauge} data={data} />
           <FeaturePanel />
           <WatchlistPanel />
@@ -307,7 +363,7 @@ function HealthRow({ label, value, tone }) {
   const tones = {
     emerald: "bg-emerald-400",
     amber: "bg-amber-400",
-    cyan: "bg-cyan-400",
+    cyan: "bg-primary",
   };
 
   return (
@@ -323,14 +379,14 @@ function HealthRow({ label, value, tone }) {
 
 function StatCard({ label, value, detail, icon: Icon, tone }) {
   const tones = {
-    cyan: "bg-cyan-500/12 text-cyan-300",
+    cyan: "bg-primary/12 text-primary",
     amber: "bg-amber-500/12 text-amber-300",
     emerald: "bg-emerald-500/12 text-emerald-300",
-    rose: "bg-rose-500/12 text-rose-300",
+    rose: "bg-orange-500/12 text-orange-300",
   };
 
   return (
-    <Card className="border-border/80 bg-card/85 shadow-sm">
+    <Card className="depth-panel border-border/80 bg-card/88">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -349,13 +405,13 @@ function StatCard({ label, value, detail, icon: Icon, tone }) {
 
 function LatestBlocks({ blocks }) {
   return (
-    <Card className="border-border/80 bg-card/85">
+    <Card id="latest-blocks" className="depth-panel scroll-mt-24 border-border/80 bg-card/88">
       <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border">
         <div>
           <CardTitle className="text-lg">Latest Blocks</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">Freshly indexed execution blocks</p>
         </div>
-        <Badge variant="outline" className="border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
           Live
         </Badge>
       </CardHeader>
@@ -365,7 +421,7 @@ function LatestBlocks({ blocks }) {
             <Link key={block.hash} to={`/block/${hexToNumber(block.number)}`} className="block p-4 transition-colors hover:bg-muted/35">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 gap-3">
-                  <div className="grid size-11 shrink-0 place-items-center rounded-md bg-cyan-500/12 text-cyan-300">
+              <div className="grid size-11 shrink-0 place-items-center rounded-md bg-primary/12 text-primary">
                     <Box className="size-5" />
                   </div>
                   <div className="min-w-0">
@@ -393,7 +449,7 @@ function LatestBlocks({ blocks }) {
 
 function LatestTransactions({ transactions }) {
   return (
-    <Card className="border-border/80 bg-card/85">
+    <Card id="latest-transactions" className="depth-panel scroll-mt-24 border-border/80 bg-card/88">
       <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border">
         <div>
           <CardTitle className="text-lg">Latest Transactions</CardTitle>
@@ -416,7 +472,7 @@ function LatestTransactions({ transactions }) {
             {transactions.map((tx) => (
               <TableRow key={tx.hash}>
                 <TableCell>
-                  <Link to={`/tx/${tx.hash}`} className="flex items-center gap-2 font-mono text-sm text-cyan-300 hover:text-cyan-200">
+                  <Link to={`/tx/${tx.hash}`} className="flex items-center gap-2 font-mono text-sm text-primary hover:text-primary/80">
                     <Hash className="size-4" />
                     {formatAddress(tx.hash, 10, 8)}
                   </Link>
@@ -467,7 +523,7 @@ function InsightCard({ title, icon: Icon, data }) {
     : 0;
 
   return (
-    <Card className="border-border/80 bg-card/85">
+    <Card className="depth-panel border-border/80 bg-card/88">
       <CardHeader className="border-b border-border">
         <CardTitle className="flex items-center gap-2 text-base">
           <Icon className="size-4 text-amber-300" />
@@ -503,7 +559,7 @@ function FeaturePanel() {
   ];
 
   return (
-    <Card className="border-border/80 bg-card/85">
+    <Card className="depth-panel border-border/80 bg-card/88">
       <CardHeader className="border-b border-border">
         <CardTitle className="text-base">Explorer Toolkit</CardTitle>
       </CardHeader>
@@ -526,7 +582,7 @@ function FeaturePanel() {
 
 function WatchlistPanel() {
   return (
-    <Card className="border-border/80 bg-card/85">
+    <Card className="depth-panel border-border/80 bg-card/88">
       <CardHeader className="border-b border-border">
         <CardTitle className="text-base">Signal Watch</CardTitle>
       </CardHeader>
@@ -544,7 +600,7 @@ function WatchlistPanel() {
             <div className="text-sm font-medium">Contract activity</div>
             <div className="text-sm text-muted-foreground">Trace-ready transaction links</div>
           </div>
-          <Badge variant="outline" className="border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+          <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
             Ready
           </Badge>
         </div>
@@ -556,7 +612,7 @@ function WatchlistPanel() {
 function DetailLayout({ title, eyebrow, children, loading, error }) {
   return (
     <Shell>
-      <section className="border-b border-border bg-card/30">
+      <section className="border-b border-border bg-card/45">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -589,7 +645,7 @@ function BlockPage() {
     <DetailLayout title={data ? `Block ${formatNumber(data.number)}` : "Block"} eyebrow="Block detail" loading={loading} error={error}>
       {data && (
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <Card className="border-border/80 bg-card/85">
+          <Card className="depth-panel border-border/80 bg-card/88">
             <CardHeader className="border-b border-border">
               <CardTitle>Block Summary</CardTitle>
             </CardHeader>
@@ -619,7 +675,7 @@ function TransactionPage() {
     <DetailLayout title="Transaction" eyebrow={hash ? formatAddress(hash, 14, 12) : "Transaction detail"} loading={loading} error={error}>
       {tx && (
         <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-          <Card className="border-border/80 bg-card/85">
+          <Card className="depth-panel border-border/80 bg-card/88">
             <CardHeader className="border-b border-border">
               <CardTitle>Transaction Summary</CardTitle>
             </CardHeader>
@@ -633,7 +689,7 @@ function TransactionPage() {
               <DetailRow label="Block" value={tx.blockNumber ? formatNumber(tx.blockNumber) : "Pending"} />
             </CardContent>
           </Card>
-          <Card className="border-border/80 bg-card/85">
+          <Card className="depth-panel border-border/80 bg-card/88">
             <CardHeader className="border-b border-border">
               <CardTitle>Execution Receipt</CardTitle>
             </CardHeader>
@@ -658,7 +714,7 @@ function AddressPage() {
     <DetailLayout title="Address" eyebrow={address ? formatAddress(address, 14, 12) : "Address detail"} loading={loading} error={error}>
       {data && (
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-          <Card className="border-border/80 bg-card/85">
+          <Card className="depth-panel border-border/80 bg-card/88">
             <CardHeader className="border-b border-border">
               <CardTitle>Account Overview</CardTitle>
             </CardHeader>
@@ -687,7 +743,7 @@ function AddressPage() {
 
 function TransactionsTable({ transactions }) {
   return (
-    <Card className="border-border/80 bg-card/85">
+    <Card className="depth-panel border-border/80 bg-card/88">
       <CardHeader className="border-b border-border">
         <CardTitle>Transactions In Block</CardTitle>
       </CardHeader>
@@ -705,7 +761,7 @@ function TransactionsTable({ transactions }) {
             {transactions.map((tx) => (
               <TableRow key={tx.hash}>
                 <TableCell>
-                  <Link to={`/tx/${tx.hash}`} className="font-mono text-cyan-300 hover:text-cyan-200">
+                  <Link to={`/tx/${tx.hash}`} className="font-mono text-primary hover:text-primary/80">
                     {formatAddress(tx.hash, 10, 8)}
                   </Link>
                 </TableCell>
@@ -775,7 +831,7 @@ function useApi(path) {
   useEffect(() => {
     let mounted = true;
 
-    axios
+    api
       .get(path)
       .then((response) => {
         if (!mounted) return;
@@ -792,6 +848,29 @@ function useApi(path) {
   }, [path]);
 
   return { data: state.path === path ? state.data : null, loading: state.path !== path, error: state.path === path ? state.error : "" };
+}
+
+function NetworkScene({ latestBlock = 0, transactions = 0 }) {
+  const blockDigits = String(latestBlock || 0).slice(-5).padStart(5, "0");
+
+  return (
+    <div className="scene-wrap border-t border-border p-5">
+      <div className="chain-scene" aria-label="Live Veltrix block stream">
+        <div className="scene-grid" />
+        <div className="block-stack" style={{ "--tx-load": Math.min(8, transactions + 2) }}>
+          <div className="block-cube cube-a">
+            <span>{blockDigits}</span>
+          </div>
+          <div className="block-cube cube-b" />
+          <div className="block-cube cube-c" />
+        </div>
+        <div className="scene-readout">
+          <span>HEAD</span>
+          <strong>{formatNumber(latestBlock)}</strong>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function App() {

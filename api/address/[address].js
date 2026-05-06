@@ -1,4 +1,4 @@
-import { rpcCall, sendError, sendJson } from "../_lib/rpc.js";
+import { ADDRESS_PATTERN, rpcCall, sendError, sendJson } from "../_lib/rpc.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,6 +9,10 @@ export default async function handler(req, res) {
   try {
     const { address } = req.query;
     const value = Array.isArray(address) ? address[0] : address;
+    if (!ADDRESS_PATTERN.test(value || "")) {
+      sendJson(res, 400, { error: "Invalid address" });
+      return;
+    }
 
     const [balance, txCount, code] = await Promise.all([
       rpcCall("eth_getBalance", [value, "latest"]),
@@ -21,7 +25,7 @@ export default async function handler(req, res) {
       balance,
       transactionCount: Number.parseInt(txCount, 16),
       isContract: code !== "0x",
-    });
+    }, 5);
   } catch (error) {
     sendError(res, error);
   }

@@ -46,9 +46,9 @@ const api = axios.create({
 });
 
 const NAV_ITEMS = [
-  { label: "Blocks", href: "#latest-blocks" },
-  { label: "Transactions", href: "#latest-transactions" },
-  { label: "Network", href: "#network-health" },
+  { label: "Blocks", href: "/#latest-blocks" },
+  { label: "Transactions", href: "/#latest-transactions" },
+  { label: "Network", href: "/#network-health" },
   { label: "API", href: "/api/dashboard", external: true },
 ];
 
@@ -732,7 +732,7 @@ function AddressPage() {
             <CardContent className="space-y-4 p-5">
               <DetailRow label="Address" value={data.address} copy />
               <DetailRow label="Balance" value={`${formatEther(data.balance)} ETH`} />
-              <DetailRow label="Transaction count" value={formatNumber(data.transactionCount)} />
+              <DetailRow label="Submitted tx count" value={formatNumber(data.transactionCount)} />
               <DetailRow label="Type" value={data.isContract ? "Smart contract" : "Externally owned account"} />
               <DetailRow label="Indexed window" value={`Latest ${formatNumber(data.scannedBlockDepth)} blocks`} />
             </CardContent>
@@ -743,7 +743,7 @@ function AddressPage() {
             </CardHeader>
             <CardContent className="grid gap-3 p-5">
               <Signal label="Verification" value={data.isContract ? "Contract bytecode detected" : "Wallet account"} icon={BadgeCheck} />
-              <Signal label="Activity" value={`${formatNumber(data.transactionCount)} submitted transactions`} icon={Activity} />
+              <Signal label="Activity" value={`${formatNumber(data.transactionCount)} submitted transactions by nonce`} icon={Activity} />
               <Signal label="Holdings" value={`${formatEther(data.balance, 4)} ETH native balance`} icon={CircleDollarSign} />
             </CardContent>
           </Card>
@@ -753,7 +753,11 @@ function AddressPage() {
               <Badge variant="secondary">{recentTransactions.length} matches</Badge>
             </CardHeader>
             <CardContent className="p-0">
-              <TransactionsTable transactions={recentTransactions} emptyLabel="No matching transactions in the indexed window" embedded />
+              <TransactionsTable
+                transactions={recentTransactions}
+                emptyLabel={`No matching transactions in the latest ${formatNumber(data.scannedBlockDepth)} blocks`}
+                embedded
+              />
             </CardContent>
           </Card>
         </div>

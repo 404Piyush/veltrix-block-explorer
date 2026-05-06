@@ -76,6 +76,16 @@ const formatEther = (hex, digits = 5) => {
   return `${whole.toString()}.${padded}`;
 };
 
+const formatGasPrice = (weiHex) => {
+  if (!weiHex) return "...";
+  const wei = BigInt(weiHex);
+  if (wei === 0n) return "0 wei";
+  const gwei = Number(wei) / 1e9;
+  if (gwei < 0.0001) return `${wei.toLocaleString("en-US")} wei`;
+  if (gwei < 0.01) return `${gwei.toFixed(6)} Gwei`;
+  return `${gwei.toFixed(2)} Gwei`;
+};
+
 const formatGasRatio = (used, limit) => {
   const gasUsed = hexToNumber(used);
   const gasLimit = hexToNumber(limit);
@@ -314,7 +324,7 @@ function Home() {
               {error && <div className="border-b border-destructive/30 bg-destructive/10 p-4 text-sm text-red-200">{error}</div>}
               <div className="grid grid-cols-2 border-b border-border">
                 <MiniMetric label="Latest block" value={data ? formatNumber(data.latestBlock) : "..."} icon={Box} />
-                <MiniMetric label="Gas price" value={data ? `${data.gasPrice} Gwei` : "..."} icon={Zap} />
+                <MiniMetric label="Gas quote" value={data ? formatGasPrice(data.gasPriceWei) : "..."} icon={Zap} />
                 <MiniMetric label="Chain ID" value={data ? data.chainId : "..."} icon={ShieldCheck} />
                 <MiniMetric label="Client" value={data ? data.clientVersion?.split("/")?.[0] : "..."} icon={Cpu} />
               </div>
@@ -332,8 +342,8 @@ function Home() {
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Latest Block" value={data ? formatNumber(data.latestBlock) : "..."} detail="Head of canonical chain" icon={Layers3} tone="cyan" />
-          <StatCard label="Gas Price" value={data ? `${data.gasPrice} Gwei` : "..."} detail="Current network quote" icon={Gauge} tone="amber" />
-          <StatCard label="User Txs" value={data ? data.userTxCount : "..."} detail={data ? `${data.systemTxCount} system txs sampled` : "From recent blocks"} icon={ArrowLeftRight} tone="emerald" />
+          <StatCard label="Gas Quote" value={data ? formatGasPrice(data.gasPriceWei) : "..."} detail="Current L2 RPC quote" icon={Gauge} tone="amber" />
+          <StatCard label="Recent User Txs" value={data ? `${data.userTxCount} recent` : "..."} detail={data ? `${data.systemTxCount} OP Stack system txs sampled` : "From latest sampled blocks"} icon={ArrowLeftRight} tone="emerald" />
           <StatCard label="Explorer Mode" value="Realtime" detail="Polling live JSON-RPC" icon={Database} tone="rose" />
         </div>
 
@@ -720,6 +730,7 @@ function AddressPage() {
   const { address } = useParams();
   const { data, loading, error } = useApi(`/address/${address}`);
   const recentTransactions = data?.recentTransactions || [];
+  const activitySource = data?.recentSource === "indexer" ? "Indexed history" : `Latest ${formatNumber(data?.scannedBlockDepth)} blocks`;
 
   return (
     <DetailLayout title="Address" eyebrow={address ? formatAddress(address, 14, 12) : "Address detail"} loading={loading} error={error}>
@@ -734,7 +745,8 @@ function AddressPage() {
               <DetailRow label="Balance" value={`${formatEther(data.balance)} ETH`} />
               <DetailRow label="Submitted tx count" value={formatNumber(data.transactionCount)} />
               <DetailRow label="Type" value={data.isContract ? "Smart contract" : "Externally owned account"} />
-              <DetailRow label="Indexed window" value={`Latest ${formatNumber(data.scannedBlockDepth)} blocks`} />
+              <DetailRow label="Activity source" value={activitySource} />
+              {data.indexer && <DetailRow label="Indexer head" value={`${formatNumber(data.indexer.lastIndexedBlock)} / ${formatNumber(data.latestBlock)}`} />}
             </CardContent>
           </Card>
           <Card className="depth-panel border-border/80 bg-card/88">
@@ -743,7 +755,11 @@ function AddressPage() {
             </CardHeader>
             <CardContent className="grid gap-3 p-5">
               <Signal label="Verification" value={data.isContract ? "Contract bytecode detected" : "Wallet account"} icon={BadgeCheck} />
-              <Signal label="Activity" value={`${formatNumber(data.transactionCount)} submitted transactions by nonce`} icon={Activity} />
+              <Signal
+                label="Activity"
+                value={`${formatNumber(data.transactionCount)} submitted by nonce, ${formatNumber(data.indexedTransactionCount || recentTransactions.length)} indexed matches`}
+                icon={Activity}
+              />
               <Signal label="Holdings" value={`${formatEther(data.balance, 4)} ETH native balance`} icon={CircleDollarSign} />
             </CardContent>
           </Card>
@@ -755,7 +771,7 @@ function AddressPage() {
             <CardContent className="p-0">
               <TransactionsTable
                 transactions={recentTransactions}
-                emptyLabel={`No matching transactions in the latest ${formatNumber(data.scannedBlockDepth)} blocks`}
+                emptyLabel={`No matching transactions from ${activitySource.toLowerCase()}`}
                 embedded
               />
             </CardContent>

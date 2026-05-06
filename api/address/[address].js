@@ -2,6 +2,7 @@ import { ADDRESS_PATTERN, rpcCall, sendError, sendJson } from "../_lib/rpc.js";
 
 const DEFAULT_SCAN_DEPTH = 500;
 const MAX_SCAN_DEPTH = 1000;
+const INDEXER_API_URL = process.env.INDEXER_API_URL || "";
 
 function scanDepthFromRequest(req) {
   const requested = Number.parseInt(req.query.depth, 10);
@@ -57,6 +58,8 @@ export default async function handler(req, res) {
           }))
       )
       .slice(0, 25);
+    const indexedHistory = await fetchIndexedAddress(value);
+    const indexedTransactions = indexedHistory?.transactions || [];
 
     sendJson(res, 200, {
       address: value,
@@ -65,9 +68,24 @@ export default async function handler(req, res) {
       isContract: code !== "0x",
       latestBlock,
       scannedBlockDepth: scanDepth,
-      recentTransactions,
+      indexer: indexedHistory?.indexer || null,
+      recentTransactions: indexedTransactions.length > 0 ? indexedTransactions : recentTransactions,
+      recentSource: indexedTransactions.length > 0 ? "indexer" : "recent-scan",
+      indexedTransactionCount: indexedHistory?.indexedTransactionCount || 0,
     }, 5);
   } catch (error) {
     sendError(res, error);
+  }
+}
+
+async function fetchIndexedAddress(address) {
+  if (!INDEXER_API_URL) return null;
+
+  try {
+    const response = await fetch(`${INDEXER_API_URL.replace(/\/$/, "")}/api/address/${address}`);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
   }
 }

@@ -16,6 +16,7 @@ It provides a fast public dashboard, block and transaction detail views, address
 
 - Frontend: React, Vite, Tailwind CSS, Radix UI
 - API layer: Vercel serverless functions
+- Address history: optional VPS indexer in `indexer/`
 - Data source: Veltrix JSON-RPC
 - Deployment target: Vercel
 
@@ -23,6 +24,7 @@ It provides a fast public dashboard, block and transaction detail views, address
 
 ```text
 api/        Vercel serverless API routes
+indexer/    Optional VPS service for indexed address history
 public/     Static assets
 src/        Explorer frontend
 vercel.json SPA rewrite config
@@ -36,12 +38,14 @@ Required values:
 
 ```bash
 RPC_URL=https://veltrix-rpc.404piyush.me
+INDEXER_API_URL=https://explorer-api.404piyush.me
 VITE_API_BASE=/api
 ```
 
 Notes:
 
 - `RPC_URL` is used by the serverless API routes.
+- `INDEXER_API_URL` enables full indexed address history when the VPS indexer is deployed.
 - `VITE_API_BASE` should stay as `/api` for Vercel.
 - For purely local frontend work against another backend, `VITE_API_BASE` can point to a full URL.
 
@@ -90,6 +94,7 @@ Set this environment variable in Vercel:
 
 ```bash
 RPC_URL=https://veltrix-rpc.404piyush.me
+INDEXER_API_URL=https://explorer-api.404piyush.me
 ```
 
 Suggested domains:
@@ -109,5 +114,5 @@ These routes proxy read-only explorer queries to the Veltrix RPC and shape the r
 ## Production Notes
 
 - This explorer is intentionally thin and RPC-backed. It is not an archive indexer.
-- Heavy historical analytics should be handled by a dedicated indexing service later if needed.
+- Full address history requires the included `indexer/` service because Ethereum JSON-RPC does not expose address transaction lists.
 - Keep the RPC endpoint private to your own infrastructure; the explorer should never embed secrets in the browser bundle.

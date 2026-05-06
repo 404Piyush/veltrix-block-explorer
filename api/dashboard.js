@@ -15,6 +15,13 @@ function classifyTx(tx) {
   };
 }
 
+function formatGasPriceGwei(gasPriceHex) {
+  const gwei = Number.parseInt(gasPriceHex, 16) / 1e9;
+  if (!gwei) return "0";
+  if (gwei < 0.01) return gwei.toFixed(6);
+  return gwei.toFixed(2);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     sendJson(res, 405, { error: "Method not allowed" });
@@ -49,7 +56,8 @@ export default async function handler(req, res) {
 
     sendJson(res, 200, {
       latestBlock: latestBlockNum,
-      gasPrice: (Number.parseInt(gasPriceHex, 16) / 1e9).toFixed(2),
+      gasPrice: formatGasPriceGwei(gasPriceHex),
+      gasPriceWei: gasPriceHex,
       chainId: Number.parseInt(chainIdHex, 16),
       clientVersion,
       userTxCount,

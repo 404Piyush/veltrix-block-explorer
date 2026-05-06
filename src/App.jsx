@@ -80,7 +80,13 @@ const formatGasRatio = (used, limit) => {
   const gasUsed = hexToNumber(used);
   const gasLimit = hexToNumber(limit);
   if (!gasLimit) return 0;
-  return Math.min(100, Math.round((gasUsed / gasLimit) * 100));
+  return Math.min(100, (gasUsed / gasLimit) * 100);
+};
+
+const formatPercent = (value, digits = 2) => {
+  if (!value) return "0%";
+  if (value > 0 && value < 0.01) return "<0.01%";
+  return `${value.toFixed(digits)}%`;
 };
 
 const timeAgo = (timestamp) => {
@@ -260,11 +266,12 @@ function Home() {
     if (!data) return [];
     const latestBlock = Number(data.latestBlock || 0);
     const gas = Number(data.gasPrice || 0);
-    const txCount = data.transactions?.length || 0;
+    const userTxCount = data.userTxCount || 0;
+    const systemTxCount = data.systemTxCount || 0;
     return [
       { label: "Sync Height", value: `${formatNumber(latestBlock)} / ${formatNumber(latestBlock)}`, tone: "emerald" },
       { label: "Base Fee Trend", value: gas > 10 ? "Elevated" : "Normal", tone: gas > 10 ? "amber" : "emerald" },
-      { label: "Recent Throughput", value: `${txCount} txs sampled`, tone: "cyan" },
+      { label: "Recent Throughput", value: `${userTxCount} user / ${systemTxCount} system`, tone: "cyan" },
     ];
   }, [data]);
 
@@ -326,7 +333,7 @@ function Home() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Latest Block" value={data ? formatNumber(data.latestBlock) : "..."} detail="Head of canonical chain" icon={Layers3} tone="cyan" />
           <StatCard label="Gas Price" value={data ? `${data.gasPrice} Gwei` : "..."} detail="Current network quote" icon={Gauge} tone="amber" />
-          <StatCard label="Sampled Txs" value={data ? data.transactions.length : "..."} detail="From recent blocks" icon={ArrowLeftRight} tone="emerald" />
+          <StatCard label="User Txs" value={data ? data.userTxCount : "..."} detail={data ? `${data.systemTxCount} system txs sampled` : "From recent blocks"} icon={ArrowLeftRight} tone="emerald" />
           <StatCard label="Explorer Mode" value="Realtime" detail="Polling live JSON-RPC" icon={Database} tone="rose" />
         </div>
 
@@ -427,7 +434,7 @@ function LatestBlocks({ blocks }) {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">Block {formatNumber(block.number)}</span>
-                      <Badge variant="secondary">{block.transactionCount} txns</Badge>
+                      <Badge variant="secondary">{block.userTransactionCount} user / {block.systemTransactionCount} system</Badge>
                     </div>
                     <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{block.hash}</div>
                     <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -476,6 +483,9 @@ function LatestTransactions({ transactions }) {
                     <Hash className="size-4" />
                     {formatAddress(tx.hash, 10, 8)}
                   </Link>
+                  <Badge variant="secondary" className="mt-2">
+                    {tx.explorerType === "system" ? "System" : "User"}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <div className="flex min-w-52 items-center gap-2 text-xs">
@@ -507,10 +517,10 @@ function GasPill({ used, limit }) {
     <div className="hidden min-w-28 sm:block">
       <div className="mb-1 flex justify-between text-xs text-muted-foreground">
         <span>Gas</span>
-        <span>{ratio}%</span>
+        <span>{formatPercent(ratio)}</span>
       </div>
       <div className="h-2 rounded-full bg-secondary">
-        <div className="h-full rounded-full bg-amber-400" style={{ width: `${ratio}%` }} />
+        <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.max(1, ratio)}%` }} />
       </div>
     </div>
   );
@@ -519,7 +529,7 @@ function GasPill({ used, limit }) {
 function InsightCard({ title, icon: Icon, data }) {
   const blocks = data?.blocks || [];
   const averageGas = blocks.length
-    ? Math.round(blocks.reduce((sum, block) => sum + formatGasRatio(block.gasUsed, block.gasLimit), 0) / blocks.length)
+    ? blocks.reduce((sum, block) => sum + formatGasRatio(block.gasUsed, block.gasLimit), 0) / blocks.length
     : 0;
 
   return (
@@ -531,10 +541,10 @@ function InsightCard({ title, icon: Icon, data }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-5">
-        <div className="text-4xl font-semibold">{averageGas}%</div>
+        <div className="text-4xl font-semibold">{formatPercent(averageGas)}</div>
         <p className="mt-2 text-sm text-muted-foreground">Average gas used across the latest sampled blocks.</p>
         <div className="mt-5 h-3 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full rounded-full bg-amber-400" style={{ width: `${averageGas}%` }} />
+          <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.max(1, averageGas)}%` }} />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-md border border-border bg-background/60 p-3">

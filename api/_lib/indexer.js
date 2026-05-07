@@ -1,4 +1,7 @@
+import https from "node:https";
+
 export const INDEXER_API_URL = process.env.INDEXER_API_URL || "";
+const INDEXER_TIMEOUT_MS = 5000;
 
 export async function fetchIndexerJson(path, query = {}) {
   if (!INDEXER_API_URL) return null;
@@ -10,14 +13,54 @@ export async function fetchIndexerJson(path, query = {}) {
     }
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INDEXER_TIMEOUT_MS);
+
   try {
-    const response = await fetch(url, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) return null;
-    return response.json();
+    if (typeof fetch === "function") {
+      const response = await fetch(url, {
+        headers: { accept: "application/json" },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
+      if (!response.ok) return null;
+      return response.json();
+    }
+
+    return await fetchJsonWithHttps(url);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+function fetchJsonWithHttps(url) {
+  return new Promise((resolve) => {
+    const request = https.get(url, { headers: { accept: "application/json" }, timeout: INDEXER_TIMEOUT_MS }, (response) => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        response.resume();
+        resolve(null);
+        return;
+      }
+
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(null);
+    });
+    request.on("error", () => resolve(null));
+  });
 }

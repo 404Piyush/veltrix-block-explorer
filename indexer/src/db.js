@@ -126,38 +126,117 @@ export function getIndexerStats() {
   };
 }
 
-export function getAddress(address) {
+const TX_SELECT = `
+  SELECT
+    transactions.hash,
+    transactions.block_number AS blockNumber,
+    transactions.transaction_index AS transactionIndex,
+    transactions.from_address AS fromAddress,
+    transactions.to_address AS toAddress,
+    transactions.value,
+    transactions.gas,
+    transactions.gas_price AS gasPrice,
+    transactions.type,
+    transactions.explorer_type AS explorerType,
+    blocks.timestamp AS timestamp
+  FROM transactions
+  LEFT JOIN blocks ON blocks.number = transactions.block_number
+`;
+
+function clampPaging({ limit = 25, offset = 0 } = {}) {
+  const parsedLimit = Number.parseInt(limit, 10);
+  const parsedOffset = Number.parseInt(offset, 10);
+  return {
+    limit: Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 25,
+    offset: Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0,
+  };
+}
+
+function normalizeType(type) {
+  return type === "user" || type === "system" ? type : "all";
+}
+
+function decorateTx(tx, address = "") {
   const normalized = address.toLowerCase();
+  return {
+    ...tx,
+    from: tx.fromAddress,
+    to: tx.toAddress,
+    direction: normalized ? (tx.fromAddress === normalized ? "out" : "in") : null,
+    blockNumberHex: `0x${tx.blockNumber.toString(16)}`,
+    timestampHex: tx.timestamp ? `0x${tx.timestamp.toString(16)}` : null,
+  };
+}
+
+export function getAddress(address, options = {}) {
+  const normalized = address.toLowerCase();
+  const { limit, offset } = clampPaging(options);
+  const type = normalizeType(options.type);
+  const typeFilter = type === "all" ? "" : " AND explorer_type = ?";
+  const baseParams = type === "all" ? [normalized, normalized] : [normalized, normalized, type];
+
   const txs = db
-    .prepare(`
-      SELECT
-        hash,
-        block_number AS blockNumber,
-        transaction_index AS transactionIndex,
-        from_address AS fromAddress,
-        to_address AS toAddress,
-        value,
-        gas,
-        gas_price AS gasPrice,
-        type,
-        explorer_type AS explorerType
-      FROM transactions
-      WHERE from_address = ? OR to_address = ?
-      ORDER BY block_number DESC, transaction_index DESC
-      LIMIT 100
+    .prepare(`${TX_SELECT}
+      WHERE (from_address = ? OR to_address = ?)${typeFilter}
+      ORDER BY transactions.block_number DESC, transactions.transaction_index DESC
+      LIMIT ? OFFSET ?
     `)
-    .all(normalized, normalized)
-    .map((tx) => ({
-      ...tx,
-      from: tx.fromAddress,
-      to: tx.toAddress,
-      direction: tx.fromAddress === normalized ? "out" : "in",
-      blockNumberHex: `0x${tx.blockNumber.toString(16)}`,
-    }));
+    .all(...baseParams, limit, offset)
+    .map((tx) => decorateTx(tx, normalized));
+  const total = db
+    .prepare(`SELECT COUNT(*) AS count FROM transactions WHERE (from_address = ? OR to_address = ?)${typeFilter}`)
+    .get(...baseParams).count;
 
   return {
     transactions: txs,
-    indexedTransactionCount: txs.length,
+    indexedTransactionCount: total,
+    page: { limit, offset, type, returned: txs.length, hasMore: offset + txs.length < total },
+    indexer: getIndexerStats(),
+  };
+}
+
+export function getTransactions(options = {}) {
+  const { limit, offset } = clampPaging(options);
+  const type = normalizeType(options.type);
+  const typeFilter = type === "all" ? "" : "WHERE transactions.explorer_type = ?";
+  const params = type === "all" ? [] : [type];
+  const transactions = db
+    .prepare(`${TX_SELECT}
+      ${typeFilter}
+      ORDER BY transactions.block_number DESC, transactions.transaction_index DESC
+      LIMIT ? OFFSET ?
+    `)
+    .all(...params, limit, offset)
+    .map((tx) => decorateTx(tx));
+  const total = db.prepare(`SELECT COUNT(*) AS count FROM transactions ${type === "all" ? "" : "WHERE explorer_type = ?"}`).get(...params).count;
+
+  return {
+    transactions,
+    page: { limit, offset, type, returned: transactions.length, hasMore: offset + transactions.length < total, total },
+    indexer: getIndexerStats(),
+  };
+}
+
+export function getBlocks(options = {}) {
+  const { limit, offset } = clampPaging(options);
+  const blocks = db
+    .prepare(`
+      SELECT number, hash, timestamp, gas_used AS gasUsed, gas_limit AS gasLimit, transaction_count AS transactionCount
+      FROM blocks
+      ORDER BY number DESC
+      LIMIT ? OFFSET ?
+    `)
+    .all(limit, offset)
+    .map((block) => ({
+      ...block,
+      numberHex: `0x${block.number.toString(16)}`,
+      timestampHex: `0x${block.timestamp.toString(16)}`,
+    }));
+  const total = db.prepare("SELECT COUNT(*) AS count FROM blocks").get().count;
+
+  return {
+    blocks,
+    page: { limit, offset, returned: blocks.length, hasMore: offset + blocks.length < total, total },
     indexer: getIndexerStats(),
   };
 }

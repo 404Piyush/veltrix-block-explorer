@@ -52,6 +52,20 @@ const NAV_ITEMS = [
   { label: "API", href: "/api/dashboard", external: true },
 ];
 
+const PREDEPLOY_NAMES = {
+  "0x4200000000000000000000000000000000000015": "L1Block",
+  "0x4200000000000000000000000000000000000016": "L2ToL1MessagePasser",
+  "0x4200000000000000000000000000000000000011": "SequencerFeeVault",
+  "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001": "SystemTx",
+};
+
+const ADDRESS_ACTIVITY_LIMIT = 10;
+const ACTIVITY_TYPES = [
+  { label: "All", value: "all" },
+  { label: "User", value: "user" },
+  { label: "System", value: "system" },
+];
+
 const formatAddress = (address, head = 8, tail = 6) => {
   if (!address) return "N/A";
   return `${address.slice(0, head)}...${address.slice(-tail)}`;
@@ -59,6 +73,7 @@ const formatAddress = (address, head = 8, tail = 6) => {
 
 const hexToNumber = (hex) => {
   if (!hex) return 0;
+  if (typeof hex === "number") return hex;
   return Number.parseInt(hex, 16);
 };
 
@@ -108,6 +123,17 @@ const timeAgo = (timestamp) => {
   const hours = Math.floor(minutes / 60);
   return `${hours}h ago`;
 };
+
+const labelAddress = (address) => {
+  if (!address) return "Contract creation";
+  const label = PREDEPLOY_NAMES[address.toLowerCase()];
+  return label ? `${label} (${formatAddress(address, 8, 5)})` : formatAddress(address);
+};
+
+const typeBadgeClass = (type) =>
+  type === "system"
+    ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
 
 const copyText = async (value) => {
   if (!value || !navigator.clipboard) return;
@@ -246,6 +272,8 @@ function ExplorerSearch({ compact = false }) {
 function Home() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const { data: indexedBlocks } = useApi("/blocks?limit=6");
+  const { data: indexedTransactions } = useApi("/transactions?limit=6&type=all");
 
   useEffect(() => {
     let mounted = true;
@@ -284,6 +312,9 @@ function Home() {
       { label: "Recent Throughput", value: `${userTxCount} user / ${systemTxCount} system`, tone: "cyan" },
     ];
   }, [data]);
+
+  const displayBlocks = indexedBlocks?.blocks?.length ? indexedBlocks.blocks : data?.blocks || [];
+  const displayTransactions = indexedTransactions?.transactions?.length ? indexedTransactions.transactions : data?.transactions || [];
 
   return (
     <Shell>
@@ -333,7 +364,7 @@ function Home() {
                   <HealthRow key={item.label} {...item} />
                 ))}
               </div>
-              <NetworkScene latestBlock={data?.latestBlock} transactions={data?.transactions?.length || 0} />
+              <NetworkScene latestBlock={data?.latestBlock} transactions={displayTransactions.length} />
             </CardContent>
           </Card>
         </div>
@@ -344,12 +375,18 @@ function Home() {
           <StatCard label="Latest Block" value={data ? formatNumber(data.latestBlock) : "..."} detail="Head of canonical chain" icon={Layers3} tone="cyan" />
           <StatCard label="Gas Quote" value={data ? formatGasPrice(data.gasPriceWei) : "..."} detail="Current L2 RPC quote" icon={Gauge} tone="amber" />
           <StatCard label="Recent User Txs" value={data ? `${data.userTxCount} recent` : "..."} detail={data ? `${data.systemTxCount} OP Stack system txs sampled` : "From latest sampled blocks"} icon={ArrowLeftRight} tone="emerald" />
-          <StatCard label="Explorer Mode" value="Realtime" detail="Polling live JSON-RPC" icon={Database} tone="rose" />
+          <StatCard
+            label="Explorer Mode"
+            value={indexedTransactions?.indexer ? "Indexed" : "Realtime"}
+            detail={indexedTransactions?.indexer ? `Indexer head ${formatNumber(indexedTransactions.indexer.lastIndexedBlock)}` : "Polling live JSON-RPC"}
+            icon={Database}
+            tone="rose"
+          />
         </div>
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_0.95fr]">
-          <LatestBlocks blocks={data?.blocks || []} />
-          <LatestTransactions transactions={data?.transactions || []} />
+          <LatestBlocks blocks={displayBlocks} />
+          <LatestTransactions transactions={displayTransactions} />
         </div>
 
         <div id="network-health" className="mt-8 grid scroll-mt-24 gap-6 lg:grid-cols-3">
@@ -493,17 +530,17 @@ function LatestTransactions({ transactions }) {
                     <Hash className="size-4" />
                     {formatAddress(tx.hash, 10, 8)}
                   </Link>
-                  <Badge variant="secondary" className="mt-2">
-                    {tx.explorerType === "system" ? "System" : "User"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex min-w-52 items-center gap-2 text-xs">
-                    <span className="font-mono text-muted-foreground">{formatAddress(tx.from, 8, 5)}</span>
-                    <ArrowRight className="size-3 text-muted-foreground" />
-                    <span className="font-mono text-muted-foreground">{formatAddress(tx.to, 8, 5)}</span>
-                  </div>
-                </TableCell>
+	                  <Badge variant="outline" className={cn("mt-2", typeBadgeClass(tx.explorerType))}>
+	                    {tx.explorerType === "system" ? "System" : "User"}
+	                  </Badge>
+	                </TableCell>
+	                <TableCell>
+	                  <div className="flex min-w-52 items-center gap-2 text-xs">
+	                    <span className="font-mono text-muted-foreground">{labelAddress(tx.from)}</span>
+	                    <ArrowRight className="size-3 text-muted-foreground" />
+	                    <span className="font-mono text-muted-foreground">{labelAddress(tx.to)}</span>
+	                  </div>
+	                </TableCell>
                 <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} ETH</TableCell>
               </TableRow>
             ))}
@@ -728,9 +765,14 @@ function TransactionPage() {
 
 function AddressPage() {
   const { address } = useParams();
-  const { data, loading, error } = useApi(`/address/${address}`);
+  const [activityType, setActivityType] = useState("all");
+  const [offset, setOffset] = useState(0);
+  const addressPath = `/address/${address}?limit=${ADDRESS_ACTIVITY_LIMIT}&offset=${offset}&type=${activityType}`;
+  const { data, loading, error } = useApi(addressPath);
   const recentTransactions = data?.recentTransactions || [];
   const activitySource = data?.recentSource === "indexer" ? "Indexed history" : `Latest ${formatNumber(data?.scannedBlockDepth)} blocks`;
+  const page = data?.page || { limit: ADDRESS_ACTIVITY_LIMIT, offset: 0, type: activityType, hasMore: false };
+  const currentPage = Math.floor((page.offset || 0) / (page.limit || ADDRESS_ACTIVITY_LIMIT)) + 1;
 
   return (
     <DetailLayout title="Address" eyebrow={address ? formatAddress(address, 14, 12) : "Address detail"} loading={loading} error={error}>
@@ -764,9 +806,30 @@ function AddressPage() {
             </CardContent>
           </Card>
           <Card className="depth-panel border-border/80 bg-card/88 lg:col-span-2">
-            <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border">
-              <CardTitle>Recent Address Activity</CardTitle>
-              <Badge variant="secondary">{recentTransactions.length} matches</Badge>
+            <CardHeader className="gap-4 border-b border-border md:flex-row md:items-center md:justify-between md:space-y-0">
+              <div>
+                <CardTitle>Address Activity</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {activitySource} · page {formatNumber(currentPage)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {ACTIVITY_TYPES.map((type) => (
+                  <Button
+                    key={type.value}
+                    type="button"
+	                    variant={activityType === type.value ? "default" : "outline"}
+	                    size="sm"
+	                    onClick={() => {
+	                      setActivityType(type.value);
+	                      setOffset(0);
+	                    }}
+	                  >
+                    {type.label}
+                  </Button>
+                ))}
+                <Badge variant="secondary">{formatNumber(data.indexedTransactionCount || recentTransactions.length)} indexed</Badge>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <TransactionsTable
@@ -774,6 +837,30 @@ function AddressPage() {
                 emptyLabel={`No matching transactions from ${activitySource.toLowerCase()}`}
                 embedded
               />
+              <div className="flex flex-col gap-3 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Showing {formatNumber(page.offset || 0)}-{formatNumber((page.offset || 0) + recentTransactions.length)} of{" "}
+                  {formatNumber(data.indexedTransactionCount || recentTransactions.length)}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={(page.offset || 0) <= 0 || loading}
+                    onClick={() => setOffset(Math.max(0, offset - ADDRESS_ACTIVITY_LIMIT))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!page.hasMore || loading}
+                    onClick={() => setOffset(offset + ADDRESS_ACTIVITY_LIMIT)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -786,24 +873,30 @@ function TransactionRows({ transactions, emptyLabel }) {
   return (
     <Table>
       <TableHeader>
-        <TableRow>
-          <TableHead>Hash</TableHead>
-          <TableHead>From</TableHead>
-          <TableHead>To</TableHead>
-          <TableHead>Block</TableHead>
+	        <TableRow>
+	          <TableHead>Hash</TableHead>
+	          <TableHead>Type</TableHead>
+	          <TableHead>From</TableHead>
+	          <TableHead>To</TableHead>
+	          <TableHead>Block</TableHead>
           <TableHead className="text-right">Value</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {transactions.map((tx) => (
-          <TableRow key={tx.hash}>
-            <TableCell>
-              <Link to={`/tx/${tx.hash}`} className="font-mono text-primary hover:text-primary/80">
-                {formatAddress(tx.hash, 10, 8)}
-              </Link>
-            </TableCell>
-            <TableCell className="font-mono text-xs text-muted-foreground">{formatAddress(tx.from)}</TableCell>
-            <TableCell className="font-mono text-xs text-muted-foreground">{formatAddress(tx.to)}</TableCell>
+	          <TableRow key={tx.hash}>
+	            <TableCell>
+	              <Link to={`/tx/${tx.hash}`} className="font-mono text-primary hover:text-primary/80">
+	                {formatAddress(tx.hash, 10, 8)}
+	              </Link>
+	            </TableCell>
+	            <TableCell>
+	              <Badge variant="outline" className={typeBadgeClass(tx.explorerType)}>
+	                {tx.explorerType === "system" ? "System" : "User"}
+	              </Badge>
+	            </TableCell>
+	            <TableCell className="font-mono text-xs text-muted-foreground">{labelAddress(tx.from)}</TableCell>
+	            <TableCell className="font-mono text-xs text-muted-foreground">{labelAddress(tx.to)}</TableCell>
             <TableCell className="font-mono text-xs text-muted-foreground">
               {tx.blockNumber ? (
                 <Link to={`/block/${hexToNumber(tx.blockNumber)}`} className="hover:text-foreground">
@@ -816,11 +909,11 @@ function TransactionRows({ transactions, emptyLabel }) {
             <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} ETH</TableCell>
           </TableRow>
         ))}
-        {!transactions.length && (
-          <TableRow>
-            <TableCell colSpan={5}>
-              <EmptyState label={emptyLabel} />
-            </TableCell>
+	        {!transactions.length && (
+	          <TableRow>
+	            <TableCell colSpan={6}>
+	              <EmptyState label={emptyLabel} />
+	            </TableCell>
           </TableRow>
         )}
       </TableBody>

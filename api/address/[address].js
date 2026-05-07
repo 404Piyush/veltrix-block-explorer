@@ -1,8 +1,8 @@
 import { ADDRESS_PATTERN, rpcCall, sendError, sendJson } from "../_lib/rpc.js";
+import { fetchIndexerJson } from "../_lib/indexer.js";
 
 const DEFAULT_SCAN_DEPTH = 500;
 const MAX_SCAN_DEPTH = 1000;
-const INDEXER_API_URL = process.env.INDEXER_API_URL || "";
 
 function scanDepthFromRequest(req) {
   const requested = Number.parseInt(req.query.depth, 10);
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
           }))
       )
       .slice(0, 25);
-    const indexedHistory = await fetchIndexedAddress(value);
+    const indexedHistory = await fetchIndexedAddress(value, req.query);
     const indexedTransactions = indexedHistory?.transactions || [];
 
     sendJson(res, 200, {
@@ -72,20 +72,23 @@ export default async function handler(req, res) {
       recentTransactions: indexedTransactions.length > 0 ? indexedTransactions : recentTransactions,
       recentSource: indexedTransactions.length > 0 ? "indexer" : "recent-scan",
       indexedTransactionCount: indexedHistory?.indexedTransactionCount || 0,
+      page: indexedHistory?.page || {
+        limit: recentTransactions.length,
+        offset: 0,
+        type: "all",
+        returned: recentTransactions.length,
+        hasMore: false,
+      },
     }, 5);
   } catch (error) {
     sendError(res, error);
   }
 }
 
-async function fetchIndexedAddress(address) {
-  if (!INDEXER_API_URL) return null;
-
-  try {
-    const response = await fetch(`${INDEXER_API_URL.replace(/\/$/, "")}/api/address/${address}`);
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null;
-  }
+async function fetchIndexedAddress(address, query) {
+  return fetchIndexerJson(`/api/address/${address}`, {
+    limit: query.limit,
+    offset: query.offset,
+    type: query.type,
+  });
 }

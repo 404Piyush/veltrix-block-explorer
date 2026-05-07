@@ -1,7 +1,7 @@
 import express from "express";
 
 import { PORT } from "./config.js";
-import { getAddress, getIndexerStats } from "./db.js";
+import { getAddress, getBlocks, getIndexerStats, getTransactions } from "./db.js";
 import "./sync.js";
 
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
@@ -21,6 +21,14 @@ app.get("/health", (_req, res) => {
   });
 });
 
+app.get("/api/blocks", (req, res) => {
+  res.json(getBlocks(req.query));
+});
+
+app.get("/api/transactions", (req, res) => {
+  res.json(getTransactions(req.query));
+});
+
 app.get("/api/address/:address", (req, res) => {
   const { address } = req.params;
   if (!ADDRESS_PATTERN.test(address)) {
@@ -28,7 +36,7 @@ app.get("/api/address/:address", (req, res) => {
     return;
   }
 
-  res.json(getAddress(address));
+  res.json(getAddress(address, req.query));
 });
 
 app.use((error, _req, res, _next) => {

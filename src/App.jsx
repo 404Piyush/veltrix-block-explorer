@@ -40,6 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "./lib/utils";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+const NATIVE_SYMBOL = import.meta.env.VITE_NATIVE_SYMBOL || "VEL";
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 7000,
@@ -541,7 +542,7 @@ function LatestTransactions({ transactions }) {
 	                    <span className="font-mono text-muted-foreground">{labelAddress(tx.to)}</span>
 	                  </div>
 	                </TableCell>
-                <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} ETH</TableCell>
+                <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} {NATIVE_SYMBOL}</TableCell>
               </TableRow>
             ))}
             {!transactions.length && (
@@ -740,7 +741,7 @@ function TransactionPage() {
               <DetailRow label="Hash" value={tx.hash} copy />
               <DetailRow label="From" value={tx.from} copy />
               <DetailRow label="To" value={tx.to || "Contract creation"} copy={Boolean(tx.to)} />
-              <DetailRow label="Value" value={`${formatEther(tx.value)} ETH`} />
+              <DetailRow label="Value" value={`${formatEther(tx.value)} ${NATIVE_SYMBOL}`} />
               <DetailRow label="Gas price" value={`${formatNumber(tx.gasPrice)} wei`} />
               <DetailRow label="Nonce" value={formatNumber(tx.nonce)} />
               <DetailRow label="Block" value={tx.blockNumber ? formatNumber(tx.blockNumber) : "Pending"} />
@@ -784,7 +785,7 @@ function AddressPage() {
             </CardHeader>
             <CardContent className="space-y-4 p-5">
               <DetailRow label="Address" value={data.address} copy />
-              <DetailRow label="Balance" value={`${formatEther(data.balance)} ETH`} />
+              <DetailRow label="Balance" value={`${formatEther(data.balance)} ${NATIVE_SYMBOL}`} />
               <DetailRow label="Submitted tx count" value={formatNumber(data.transactionCount)} />
               <DetailRow label="Type" value={data.isContract ? "Smart contract" : "Externally owned account"} />
               <DetailRow label="Activity source" value={activitySource} />
@@ -802,7 +803,7 @@ function AddressPage() {
                 value={`${formatNumber(data.transactionCount)} submitted by nonce, ${formatNumber(data.indexedTransactionCount || recentTransactions.length)} indexed matches`}
                 icon={Activity}
               />
-              <Signal label="Holdings" value={`${formatEther(data.balance, 4)} ETH native balance`} icon={CircleDollarSign} />
+              <Signal label="Holdings" value={`${formatEther(data.balance, 4)} ${NATIVE_SYMBOL} native balance`} icon={CircleDollarSign} />
             </CardContent>
           </Card>
           <Card className="depth-panel border-border/80 bg-card/88 lg:col-span-2">
@@ -906,7 +907,7 @@ function TransactionRows({ transactions, emptyLabel }) {
                 "Pending"
               )}
             </TableCell>
-            <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} ETH</TableCell>
+            <TableCell className="text-right font-mono text-sm">{formatEther(tx.value, 4)} {NATIVE_SYMBOL}</TableCell>
           </TableRow>
         ))}
 	        {!transactions.length && (

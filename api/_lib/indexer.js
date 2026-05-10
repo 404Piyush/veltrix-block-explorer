@@ -1,6 +1,8 @@
 import https from "node:https";
 
-export const INDEXER_API_URL = process.env.INDEXER_API_URL || "";
+const DEFAULT_INDEXER_API_URL = "https://veltrix-rpc.404piyush.me/explorer-api";
+
+export const INDEXER_API_URL = process.env.INDEXER_API_URL || DEFAULT_INDEXER_API_URL;
 const INDEXER_TIMEOUT_MS = 5000;
 
 export async function fetchIndexerJson(path, query = {}) {

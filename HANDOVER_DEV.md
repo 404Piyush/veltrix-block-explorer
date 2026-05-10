@@ -1,24 +1,33 @@
 # Veltrix Explorer - Developer Handover
 
-## 🔍 Application State
-- **UI:** Vite React explorer with custom component system
-- **Frontend Deploy:** Vercel
-- **Backend:** Vercel API routes + VPS indexer proxy
-- **Live RPC:** `https://veltrix-rpc.404piyush.me`
-- **Live Explorer:** `https://veltrix-explorer.404piyush.me`
-- **Indexer API:** `https://veltrix-rpc.404piyush.me/explorer-api`
+## Current State
+- UI: Vite React explorer with custom component system
+- Frontend deploy: Vercel
+- Backend: Vercel API routes plus VPS indexer proxy
+- Live RPC: `https://veltrix-rpc.404piyush.me`
+- Live explorer: `https://veltrix-explorer.404piyush.me`
+- Indexer API: `https://veltrix-rpc.404piyush.me/explorer-api`
 
-## 🛠️ Recent Changes
-1. **UI Upgrade:** Fully refactored from "Boring UI" to a premium Shadcn/UI dark theme with real-time data streaming.
-2. **Data Integration:** Fixed Gas Price, Chain ID, and Block metrics to pull from live network data rather than placeholders.
-3. **Network Migration:** Aligned with Chain ID `0xce608` and native symbol `VEL`.
-4. **Indexer Integration:** Address history, paginated blocks, and paginated transactions are served through the VPS indexer instead of shallow latest-block scans.
+## Done
+1. Refactored the UI into the current dark theme and layout system.
+2. Switched gas price, chain ID, and block metrics to live network data.
+3. Aligned explorer defaults to chain ID `0xce608` and native symbol `VEL`.
+4. Added the VPS-backed indexer path for address history, paginated blocks, and paginated transactions.
+5. Fixed the address page fallback so indexed history is used when available.
+6. Moved the custom domain to the current Vercel production deploy.
 
-## 🚀 Management
-- **Production UI:** `https://veltrix-explorer.404piyush.me`
-- **Vercel API Base:** `/api`
-- **VPS Indexer:** Managed via `veltrix-explorer-indexer.service`.
+## Live Management
+- Production UI: `https://veltrix-explorer.404piyush.me`
+- Vercel API base: `/api`
+- VPS indexer service: `veltrix-explorer-indexer.service`
 
-## 🚧 Next for Dev
-- Implement ERC-20 / Token Tracker support in the indexer and UI.
-- Expand tx detail pages and labeling depth from indexed data.
+## Key Files
+- `src/App.jsx`: main explorer UI
+- `api/address/[address].js`: address history aggregation
+- `api/_lib/indexer.js`: indexer proxy helper
+- `indexer/src/*`: SQLite indexer service
+
+## Remaining
+- Add ERC-20 / token tracker support.
+- Expand transaction detail pages with richer labels and provenance.
+- Improve block and address labeling depth from indexed data.

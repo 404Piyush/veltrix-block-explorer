@@ -92,6 +92,15 @@ const formatEther = (hex, digits = 5) => {
   return `${whole.toString()}.${padded}`;
 };
 
+const formatUnitsRaw = (value) => {
+  if (value === undefined || value === null) return "0";
+  try {
+    return BigInt(value).toLocaleString("en-US");
+  } catch {
+    return String(value);
+  }
+};
+
 const formatGasPrice = (weiHex) => {
   if (!weiHex) return "...";
   const wei = BigInt(weiHex);
@@ -728,6 +737,8 @@ function TransactionPage() {
   const { data, loading, error } = useApi(`/tx/${hash}`);
   const tx = data?.tx;
   const receipt = data?.receipt;
+  const provenance = data?.provenance;
+  const tokenTransfers = data?.tokenTransfers || [];
 
   return (
     <DetailLayout title="Transaction" eyebrow={hash ? formatAddress(hash, 14, 12) : "Transaction detail"} loading={loading} error={error}>
@@ -756,6 +767,45 @@ function TransactionPage() {
               <DetailRow label="Gas used" value={receipt?.gasUsed ? formatNumber(receipt.gasUsed) : "Pending"} />
               <DetailRow label="Contract address" value={receipt?.contractAddress || "N/A"} copy={Boolean(receipt?.contractAddress)} />
               <DetailRow label="Logs" value={receipt?.logs?.length || 0} />
+            </CardContent>
+          </Card>
+          <Card className="depth-panel border-border/80 bg-card/88 lg:col-span-2">
+            <CardHeader className="border-b border-border">
+              <CardTitle>Provenance & Movements</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 p-5 xl:grid-cols-2">
+              <div className="space-y-3">
+                <DetailRow label="Execution kind" value={provenance?.executionKind || "Unknown"} />
+                <DetailRow label="Sender label" value={provenance?.fromLabel || tx.from} />
+                <DetailRow label="Recipient label" value={provenance?.toLabel || tx.to || "Contract creation"} />
+                <DetailRow label="Recipient address" value={tx.to || "Contract creation"} copy={Boolean(tx.to)} />
+                <DetailRow label="Native value" value={provenance?.hasNativeValue ? `${formatEther(tx.value)} ${NATIVE_SYMBOL}` : `0 ${NATIVE_SYMBOL}`} />
+                <DetailRow label="Log count" value={provenance?.logCount ?? receipt?.logs?.length ?? 0} />
+              </div>
+              <div className="space-y-3">
+                <div className="rounded-md border border-border bg-background/60 p-4">
+                  <div className="text-sm font-medium">Token movements</div>
+                  <div className="mt-3 space-y-3">
+                    {tokenTransfers.length ? (
+                      tokenTransfers.map((move) => (
+                        <div key={`${move.tokenAddress}-${move.logIndex}`} className="rounded-md border border-border bg-card/70 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-mono text-xs text-muted-foreground">{move.tokenLabel}</div>
+                            <Badge variant="secondary">ERC-20</Badge>
+                          </div>
+                          <div className="mt-2 grid gap-1 text-sm">
+                            <div><span className="text-muted-foreground">From:</span> <span className="font-mono">{move.fromLabel}</span></div>
+                            <div><span className="text-muted-foreground">To:</span> <span className="font-mono">{move.toLabel}</span></div>
+                            <div><span className="text-muted-foreground">Raw amount:</span> <span className="font-mono">{formatUnitsRaw(move.amountRaw)}</span></div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No ERC-20 transfer logs found in this receipt.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

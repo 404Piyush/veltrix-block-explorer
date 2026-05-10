@@ -1,4 +1,5 @@
 import { HEX_HASH_PATTERN, rpcCall, sendError, sendJson } from "../_lib/rpc.js";
+import { buildTxProvenance, decodeTokenTransfers } from "../_lib/tx.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -24,7 +25,17 @@ export default async function handler(req, res) {
       return;
     }
 
-    sendJson(res, 200, { tx, receipt }, receipt ? 30 : 2);
+    sendJson(
+      res,
+      200,
+      {
+        tx,
+        receipt,
+        provenance: buildTxProvenance(tx, receipt),
+        tokenTransfers: decodeTokenTransfers(receipt),
+      },
+      receipt ? 30 : 2,
+    );
   } catch (error) {
     sendError(res, error);
   }
